@@ -31,4 +31,13 @@ export interface CreateTaskInput {
 
 export interface UpdateTaskInput extends Partial<CreateTaskInput> {
   id: number;
+}
+
+export interface CreateCategoryInput {
+  name: string;
+  color: string;
+}
+
+export interface UpdateCategoryInput extends Partial<CreateCategoryInput> {
+  id: number;
 } 

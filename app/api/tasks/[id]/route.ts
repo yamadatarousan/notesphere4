@@ -9,19 +9,11 @@ export async function GET(
 ) {
   try {
     const [tasks] = await pool.query(
-      `SELECT t.*, 
-        GROUP_CONCAT(c.id) as category_ids,
-        GROUP_CONCAT(c.name) as category_names,
-        GROUP_CONCAT(c.color) as category_colors
-      FROM tasks t
-      LEFT JOIN task_categories tc ON t.id = tc.task_id
-      LEFT JOIN categories c ON tc.category_id = c.id
-      WHERE t.id = ?
-      GROUP BY t.id`,
+      'SELECT * FROM tasks WHERE id = ?',
       [params.id]
     );
 
-    if (!tasks || (tasks as any[]).length === 0) {
+    if ((tasks as any[]).length === 0) {
       return NextResponse.json(
         { success: false, error: 'Task not found' },
         { status: 404 }
@@ -47,15 +39,15 @@ export async function PUT(
     const body: UpdateTaskInput = await request.json();
     const { title, description, status, priority, due_date, category_ids } = body;
 
+    // トランザクション開始
     const connection = await pool.getConnection();
     await connection.beginTransaction();
 
     try {
-      // タスクの更新
-      const updateFields = [];
-      const updateValues = [];
+      const updateFields: string[] = [];
+      const updateValues: any[] = [];
 
-      if (title) {
+      if (title !== undefined) {
         updateFields.push('title = ?');
         updateValues.push(title);
       }
@@ -63,17 +55,19 @@ export async function PUT(
         updateFields.push('description = ?');
         updateValues.push(description);
       }
-      if (status) {
+      if (status !== undefined) {
         updateFields.push('status = ?');
         updateValues.push(status);
       }
-      if (priority) {
+      if (priority !== undefined) {
         updateFields.push('priority = ?');
         updateValues.push(priority);
       }
       if (due_date !== undefined) {
         updateFields.push('due_date = ?');
-        updateValues.push(due_date);
+        // 日時をMySQL形式に変換
+        const formattedDueDate = due_date ? new Date(due_date).toISOString().slice(0, 19).replace('T', ' ') : null;
+        updateValues.push(formattedDueDate);
       }
 
       if (updateFields.length > 0) {
@@ -85,7 +79,7 @@ export async function PUT(
       }
 
       // カテゴリーの更新
-      if (category_ids) {
+      if (category_ids !== undefined) {
         // 既存のカテゴリー関連を削除
         await connection.query(
           'DELETE FROM task_categories WHERE task_id = ?',
@@ -104,8 +98,8 @@ export async function PUT(
 
       await connection.commit();
 
-      // 更新されたタスクを取得
-      const [tasks] = await connection.query(
+      // 更新したタスクを取得
+      const [tasks] = await pool.query(
         'SELECT * FROM tasks WHERE id = ?',
         [params.id]
       );
@@ -132,16 +126,30 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const [result] = await pool.query('DELETE FROM tasks WHERE id = ?', [params.id]);
+    const connection = await pool.getConnection();
+    await connection.beginTransaction();
 
-    if ((result as any).affectedRows === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Task not found' },
-        { status: 404 }
+    try {
+      // カテゴリー関連の削除
+      await connection.query(
+        'DELETE FROM task_categories WHERE task_id = ?',
+        [params.id]
       );
-    }
 
-    return NextResponse.json({ success: true });
+      // タスクの削除
+      await connection.query(
+        'DELETE FROM tasks WHERE id = ?',
+        [params.id]
+      );
+
+      await connection.commit();
+      return NextResponse.json({ success: true });
+    } catch (error) {
+      await connection.rollback();
+      throw error;
+    } finally {
+      connection.release();
+    }
   } catch (error) {
     console.error('Error deleting task:', error);
     return NextResponse.json(

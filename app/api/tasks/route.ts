@@ -38,10 +38,13 @@ export async function POST(request: NextRequest) {
     await connection.beginTransaction();
 
     try {
+      // 日時をMySQL形式に変換
+      const formattedDueDate = due_date ? new Date(due_date).toISOString().slice(0, 19).replace('T', ' ') : null;
+
       // タスクの作成
       const [result] = await connection.query(
         'INSERT INTO tasks (title, description, status, priority, due_date) VALUES (?, ?, ?, ?, ?)',
-        [title, description, status || 'TODO', priority || 'MEDIUM', due_date]
+        [title, description, status || 'TODO', priority || 'MEDIUM', formattedDueDate]
       );
 
       const taskId = (result as any).insertId;
@@ -63,7 +66,7 @@ export async function POST(request: NextRequest) {
         [taskId]
       );
 
-      return NextResponse.json({ success: true, data: tasks[0] });
+      return NextResponse.json({ success: true, data: (tasks as any[])[0] });
     } catch (error) {
       await connection.rollback();
       throw error;

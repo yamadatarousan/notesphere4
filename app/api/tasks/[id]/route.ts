@@ -5,12 +5,13 @@ import { UpdateTaskInput } from '@/lib/types';
 // 特定のタスクの取得
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
+  const taskId = context.params.id;
   try {
     const [tasks] = await pool.query(
       'SELECT * FROM tasks WHERE id = ?',
-      [params.id]
+      [taskId]
     );
 
     if ((tasks as any[]).length === 0) {
@@ -33,8 +34,9 @@ export async function GET(
 // タスクの更新
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
+  const taskId = context.params.id;
   try {
     const body: UpdateTaskInput = await request.json();
     const { title, description, status, priority, due_date, category_ids } = body;
@@ -71,7 +73,7 @@ export async function PUT(
       }
 
       if (updateFields.length > 0) {
-        updateValues.push(params.id);
+        updateValues.push(taskId);
         await connection.query(
           `UPDATE tasks SET ${updateFields.join(', ')} WHERE id = ?`,
           updateValues
@@ -83,12 +85,12 @@ export async function PUT(
         // 既存のカテゴリー関連を削除
         await connection.query(
           'DELETE FROM task_categories WHERE task_id = ?',
-          [params.id]
+          [taskId]
         );
 
         // 新しいカテゴリー関連を追加
         if (category_ids.length > 0) {
-          const values = category_ids.map(categoryId => [params.id, categoryId]);
+          const values = category_ids.map(categoryId => [taskId, categoryId]);
           await connection.query(
             'INSERT INTO task_categories (task_id, category_id) VALUES ?',
             [values]
@@ -101,7 +103,7 @@ export async function PUT(
       // 更新したタスクを取得
       const [tasks] = await pool.query(
         'SELECT * FROM tasks WHERE id = ?',
-        [params.id]
+        [taskId]
       );
 
       return NextResponse.json({ success: true, data: (tasks as any[])[0] });
@@ -123,8 +125,9 @@ export async function PUT(
 // タスクの削除
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
+  const taskId = context.params.id;
   try {
     const connection = await pool.getConnection();
     await connection.beginTransaction();
@@ -133,13 +136,13 @@ export async function DELETE(
       // カテゴリー関連の削除
       await connection.query(
         'DELETE FROM task_categories WHERE task_id = ?',
-        [params.id]
+        [taskId]
       );
 
       // タスクの削除
       await connection.query(
         'DELETE FROM tasks WHERE id = ?',
-        [params.id]
+        [taskId]
       );
 
       await connection.commit();

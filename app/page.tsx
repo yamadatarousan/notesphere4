@@ -6,6 +6,12 @@ import TaskCard from './components/TaskCard';
 import TaskModal from './components/TaskModal';
 import Button from './components/ui/Button';
 
+const STATUS_COLUMNS = [
+  { id: 'TODO', title: 'To Do' },
+  { id: 'IN_PROGRESS', title: 'In Progress' },
+  { id: 'DONE', title: 'Done' },
+] as const;
+
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -129,6 +135,10 @@ export default function Home() {
     }
   };
 
+  const getTasksByStatus = (status: Task['status']) => {
+    return tasks.filter(task => task.status === status);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* サイドバー */}
@@ -206,18 +216,30 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-                {tasks.map((task) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    onEdit={(task) => {
-                      setEditingTask(task);
-                      setIsModalOpen(true);
-                    }}
-                    onDelete={handleDeleteTask}
-                    onStatusChange={handleStatusChange}
-                  />
+              <div className="grid grid-cols-3 gap-6">
+                {STATUS_COLUMNS.map((column) => (
+                  <div key={column.id} className="bg-gray-50 rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-lg font-medium text-gray-900">{column.title}</h2>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                        {getTasksByStatus(column.id as Task['status']).length}
+                      </span>
+                    </div>
+                    <div className="space-y-4">
+                      {getTasksByStatus(column.id as Task['status']).map((task) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          onEdit={(task) => {
+                            setEditingTask(task);
+                            setIsModalOpen(true);
+                          }}
+                          onDelete={handleDeleteTask}
+                          onStatusChange={handleStatusChange}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             )}

@@ -1,16 +1,17 @@
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE';
 export type TaskPriority = 'LOW' | 'MEDIUM' | 'HIGH';
 
-export interface Task {
+export type Task = {
   id: number;
   title: string;
-  description: string | null;
-  status: TaskStatus;
-  priority: TaskPriority;
+  description: string;
+  status: 'TODO' | 'IN_PROGRESS' | 'DONE';
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
   due_date: Date | null;
+  category: number | null;
   created_at: Date;
   updated_at: Date;
-}
+};
 
 export interface Category {
   id: number;
@@ -20,18 +21,8 @@ export interface Category {
   updated_at: Date;
 }
 
-export interface CreateTaskInput {
-  title: string;
-  description?: string;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  due_date?: Date;
-  category_ids?: number[];
-}
-
-export interface UpdateTaskInput extends Partial<CreateTaskInput> {
-  id: number;
-}
+export type CreateTaskInput = Omit<Task, 'id' | 'created_at' | 'updated_at'>;
+export type UpdateTaskInput = Partial<CreateTaskInput> & { id: number };
 
 export interface CreateCategoryInput {
   name: string;

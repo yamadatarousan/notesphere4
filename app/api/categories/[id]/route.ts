@@ -1,34 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { UpdateCategoryInput } from '@/lib/types';
+import mysql from 'mysql2/promise';
+
+// MySQL接続設定
+const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST || 'localhost',
+  user: process.env.MYSQL_USER || 'root',
+  password: process.env.MYSQL_PASSWORD || '',
+  database: process.env.MYSQL_DATABASE || 'notesphere',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
 // 特定のカテゴリーの取得
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const id = params.id;
   try {
-    const [categories] = await pool.query(
-      `SELECT c.*, COUNT(tc.task_id) as task_count
-      FROM categories c
-      LEFT JOIN task_categories tc ON c.id = tc.category_id
-      WHERE c.id = ?
-      GROUP BY c.id`,
-      [params.id]
+    const [rows] = await pool.query(
+      'SELECT * FROM categories WHERE id = ?',
+      [id]
     );
 
-    if (!categories || (categories as any[]).length === 0) {
+    if ((rows as any[]).length === 0) {
       return NextResponse.json(
-        { success: false, error: 'Category not found' },
+        { error: 'Category not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ success: true, data: (categories as any[])[0] });
+    return NextResponse.json((rows as any[])[0]);
   } catch (error) {
     console.error('Error fetching category:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch category' },
+      { error: 'Failed to fetch category' },
       { status: 500 }
     );
   }
@@ -36,73 +43,42 @@ export async function GET(
 
 // カテゴリーの更新
 export async function PUT(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
+  const id = params.id;
   try {
-    const body: UpdateCategoryInput = await request.json();
-    const { name, color } = body;
+    const { name, color } = await request.json();
 
-    // カテゴリーの存在確認
-    const [existing] = await pool.query(
-      'SELECT id FROM categories WHERE id = ?',
-      [params.id]
+    if (!name || !color) {
+      return NextResponse.json(
+        { error: 'Name and color are required' },
+        { status: 400 }
+      );
+    }
+
+    const [result] = await pool.query(
+      'UPDATE categories SET name = ?, color = ? WHERE id = ?',
+      [name, color, id]
     );
 
-    if (!existing || (existing as any[]).length === 0) {
+    if ((result as any).affectedRows === 0) {
       return NextResponse.json(
-        { success: false, error: 'Category not found' },
+        { error: 'Category not found' },
         { status: 404 }
       );
     }
 
-    // 名前の重複チェック（名前が変更される場合）
-    if (name) {
-      const [duplicate] = await pool.query(
-        'SELECT id FROM categories WHERE name = ? AND id != ?',
-        [name, params.id]
-      );
-
-      if ((duplicate as any[]).length > 0) {
-        return NextResponse.json(
-          { success: false, error: 'Category name already exists' },
-          { status: 400 }
-        );
-      }
-    }
-
-    // カテゴリーの更新
-    const updateFields = [];
-    const updateValues = [];
-
-    if (name) {
-      updateFields.push('name = ?');
-      updateValues.push(name);
-    }
-    if (color) {
-      updateFields.push('color = ?');
-      updateValues.push(color);
-    }
-
-    if (updateFields.length > 0) {
-      updateValues.push(params.id);
-      await pool.query(
-        `UPDATE categories SET ${updateFields.join(', ')} WHERE id = ?`,
-        updateValues
-      );
-    }
-
-    // 更新されたカテゴリーを取得
-    const [categories] = await pool.query(
+    const [updatedCategory] = await pool.query(
       'SELECT * FROM categories WHERE id = ?',
-      [params.id]
+      [id]
     );
 
-    return NextResponse.json({ success: true, data: (categories as any[])[0] });
+    return NextResponse.json((updatedCategory as any[])[0]);
   } catch (error) {
     console.error('Error updating category:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to update category' },
+      { error: 'Failed to update category' },
       { status: 500 }
     );
   }
@@ -110,44 +86,41 @@ export async function PUT(
 
 // カテゴリーの削除
 export async function DELETE(
-  request: NextRequest,
+  request: Request,
   { params }: { params: { id: string } }
 ) {
+  const id = params.id;
   try {
-    // カテゴリーの存在確認
-    const [existing] = await pool.query(
-      'SELECT id FROM categories WHERE id = ?',
-      [params.id]
+    // Check if category has associated tasks
+    const [tasksResult] = await pool.query(
+      'SELECT COUNT(*) as count FROM tasks WHERE category = ?',
+      [id]
     );
 
-    if (!existing || (existing as any[]).length === 0) {
+    if ((tasksResult as any[])[0].count > 0) {
       return NextResponse.json(
-        { success: false, error: 'Category not found' },
-        { status: 404 }
-      );
-    }
-
-    // カテゴリーに関連付けられたタスクの数を確認
-    const [taskCount] = await pool.query(
-      'SELECT COUNT(*) as count FROM task_categories WHERE category_id = ?',
-      [params.id]
-    );
-
-    if ((taskCount as any[])[0].count > 0) {
-      return NextResponse.json(
-        { success: false, error: 'Cannot delete category with associated tasks' },
+        { error: 'Cannot delete category with associated tasks' },
         { status: 400 }
       );
     }
 
-    // カテゴリーの削除
-    await pool.query('DELETE FROM categories WHERE id = ?', [params.id]);
+    const [result] = await pool.query(
+      'DELETE FROM categories WHERE id = ?',
+      [id]
+    );
 
-    return NextResponse.json({ success: true });
+    if ((result as any).affectedRows === 0) {
+      return NextResponse.json(
+        { error: 'Category not found' },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({ message: 'Category deleted successfully' });
   } catch (error) {
     console.error('Error deleting category:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to delete category' },
+      { error: 'Failed to delete category' },
       { status: 500 }
     );
   }

@@ -22,6 +22,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { SortableTaskCard } from '@/app/components/SortableTaskCard';
+import Link from 'next/link';
 
 const STATUS_COLUMNS = [
   { id: 'TODO', title: 'To Do' },
@@ -112,9 +113,7 @@ export default function Home() {
     try {
       const response = await fetch('/api/categories');
       const data = await response.json();
-      if (data.success) {
-        setCategories(data.data);
-      }
+      setCategories(data);
     } catch (error) {
       console.error('Error fetching categories:', error);
     }
@@ -157,7 +156,8 @@ export default function Home() {
         },
         body: JSON.stringify({
           ...task,
-          priority: task.priority || 'MEDIUM', // デフォルトの優先度を設定
+          priority: task.priority || 'MEDIUM',
+          category: task.category || null,
         }),
       });
       const data = await response.json();
@@ -284,20 +284,18 @@ export default function Home() {
     );
 
     try {
-      // ステータスを数値に変換
-      const statusMap: { [key: string]: number } = {
-        'TODO': 0,
-        'IN_PROGRESS': 1,
-        'DONE': 2
-      };
-
       const response = await fetch(`/api/tasks/${taskId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          status: statusMap[targetStatus],
+          title: currentTask.title,
+          description: currentTask.description,
+          status: targetStatus,
+          priority: currentTask.priority,
+          due_date: currentTask.due_date,
+          category: currentTask.category
         }),
       });
 
@@ -328,18 +326,24 @@ export default function Home() {
             <h1 className="text-2xl font-bold text-gray-900">NoteSphere</h1>
           </div>
           <nav className="flex-1 px-4 space-y-1">
-            <a href="#" className="flex items-center px-4 py-2 text-sm font-medium text-gray-900 bg-gray-100 rounded-md">
+            <Link
+              href="/"
+              className="flex items-center px-4 py-2 text-sm font-medium text-gray-900 bg-gray-100 rounded-md"
+            >
               <svg className="w-5 h-5 mr-3 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
               All Tasks
-            </a>
-            <a href="#" className="flex items-center px-4 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 hover:text-gray-900">
+            </Link>
+            <Link
+              href="/categories"
+              className="flex items-center px-4 py-2 text-sm font-medium text-gray-600 rounded-md hover:bg-gray-50 hover:text-gray-900"
+            >
               <svg className="w-5 h-5 mr-3 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
               </svg>
               Categories
-            </a>
+            </Link>
           </nav>
         </div>
       </div>

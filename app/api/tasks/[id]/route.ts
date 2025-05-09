@@ -1,36 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { pool } from '@/lib/db';
-import { UpdateTaskInput, TaskStatus } from '@/lib/types';
+import mysql from 'mysql2/promise';
+
+// MySQL接続設定
+const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST || 'localhost',
+  user: process.env.MYSQL_USER || 'root',
+  password: process.env.MYSQL_PASSWORD || '',
+  database: process.env.MYSQL_DATABASE || 'notesphere',
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
 
 // 特定のタスクの取得
 export async function GET(
   request: NextRequest,
   context: { params: { id: string } }
 ) {
-  const { id: taskId } = await context.params;
+  const { id } = await context.params;
   try {
     const [rows] = await pool.query(
-      `SELECT t.*, GROUP_CONCAT(tc.category_id) as category_ids
-       FROM tasks t
-       LEFT JOIN task_categories tc ON t.id = tc.task_id
-       WHERE t.id = ?
-       GROUP BY t.id`,
-      [taskId]
+      `SELECT t.*, c.name as category_name, c.color as category_color 
+       FROM tasks t 
+       LEFT JOIN categories c ON t.category = c.id 
+       WHERE t.id = ?`,
+      [id]
     );
 
-    const tasks = rows as any[];
-    if (!tasks[0]) {
+    if ((rows as any[]).length === 0) {
       return NextResponse.json(
-        { success: false, message: 'Task not found' },
+        { success: false, error: 'Task not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json({ success: true, data: tasks[0] });
+    return NextResponse.json({ success: true, data: (rows as any[])[0] });
   } catch (error) {
     console.error('Error fetching task:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, error: 'Failed to fetch task' },
       { status: 500 }
     );
   }
@@ -38,93 +46,48 @@ export async function GET(
 
 // タスクの更新
 export async function PUT(
-  request: NextRequest,
+  request: Request,
   context: { params: { id: string } }
 ) {
-  const { id: taskId } = await context.params;
+  const { id } = await context.params;
   try {
-    const body: UpdateTaskInput = await request.json();
-    const { title, description, status, priority, due_date, category_ids } = body;
+    const { title, description, status, priority, due_date, category } = await request.json();
 
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
-
-      const updateFields = [];
-      const updateValues = [];
-
-      if (title !== undefined) {
-        updateFields.push('title = ?');
-        updateValues.push(title);
-      }
-      if (description !== undefined) {
-        updateFields.push('description = ?');
-        updateValues.push(description);
-      }
-      if (status !== undefined) {
-        // ステータスを文字列に変換
-        const statusMap: { [key: number]: TaskStatus } = {
-          0: 'TODO',
-          1: 'IN_PROGRESS',
-          2: 'DONE'
-        };
-        const statusValue = typeof status === 'number' ? statusMap[status] : status;
-        updateFields.push('status = ?');
-        updateValues.push(statusValue);
-      }
-      if (priority !== undefined) {
-        updateFields.push('priority = ?');
-        updateValues.push(priority);
-      }
-      if (due_date !== undefined) {
-        // 日時をMySQL形式に変換
-        const formattedDueDate = due_date ? new Date(due_date).toISOString().slice(0, 19).replace('T', ' ') : null;
-        updateFields.push('due_date = ?');
-        updateValues.push(formattedDueDate);
-      }
-
-      if (updateFields.length > 0) {
-        updateValues.push(taskId);
-        await connection.query(
-          `UPDATE tasks SET ${updateFields.join(', ')} WHERE id = ?`,
-          updateValues
-        );
-      }
-
-      if (category_ids !== undefined) {
-        await connection.query('DELETE FROM task_categories WHERE task_id = ?', [taskId]);
-        if (category_ids.length > 0) {
-          const categoryValues = category_ids.map((categoryId) => [taskId, categoryId]);
-          await connection.query(
-            'INSERT INTO task_categories (task_id, category_id) VALUES ?',
-            [categoryValues]
-          );
-        }
-      }
-
-      await connection.commit();
-
-      const [updatedTasks] = await connection.query(
-        `SELECT t.*, GROUP_CONCAT(tc.category_id) as category_ids
-         FROM tasks t
-         LEFT JOIN task_categories tc ON t.id = tc.task_id
-         WHERE t.id = ?
-         GROUP BY t.id`,
-        [taskId]
+    if (!title) {
+      return NextResponse.json(
+        { success: false, error: 'Title is required' },
+        { status: 400 }
       );
-
-      const tasks = updatedTasks as any[];
-      return NextResponse.json({ success: true, data: tasks[0] });
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
     }
+
+    // 日付をMySQL形式に変換
+    const formattedDueDate = due_date ? new Date(due_date).toISOString().slice(0, 19).replace('T', ' ') : null;
+
+    const [result] = await pool.query(
+      'UPDATE tasks SET title = ?, description = ?, status = ?, priority = ?, due_date = ?, category = ? WHERE id = ?',
+      [title, description, status, priority, formattedDueDate, category, id]
+    );
+
+    if ((result as any).affectedRows === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Task not found' },
+        { status: 404 }
+      );
+    }
+
+    const [updatedTask] = await pool.query(
+      `SELECT t.*, c.name as category_name, c.color as category_color 
+       FROM tasks t 
+       LEFT JOIN categories c ON t.category = c.id 
+       WHERE t.id = ?`,
+      [id]
+    );
+
+    return NextResponse.json({ success: true, data: (updatedTask as any[])[0] });
   } catch (error) {
     console.error('Error updating task:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, error: 'Failed to update task' },
       { status: 500 }
     );
   }
@@ -132,30 +95,28 @@ export async function PUT(
 
 // タスクの削除
 export async function DELETE(
-  request: NextRequest,
+  request: Request,
   context: { params: { id: string } }
 ) {
-  const { id: taskId } = await context.params;
+  const { id } = await context.params;
   try {
-    const connection = await pool.getConnection();
-    try {
-      await connection.beginTransaction();
+    const [result] = await pool.query(
+      'DELETE FROM tasks WHERE id = ?',
+      [id]
+    );
 
-      await connection.query('DELETE FROM task_categories WHERE task_id = ?', [taskId]);
-      await connection.query('DELETE FROM tasks WHERE id = ?', [taskId]);
-
-      await connection.commit();
-      return NextResponse.json({ success: true });
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
+    if ((result as any).affectedRows === 0) {
+      return NextResponse.json(
+        { success: false, error: 'Task not found' },
+        { status: 404 }
+      );
     }
+
+    return NextResponse.json({ success: true, message: 'Task deleted successfully' });
   } catch (error) {
     console.error('Error deleting task:', error);
     return NextResponse.json(
-      { success: false, message: 'Internal server error' },
+      { success: false, error: 'Failed to delete task' },
       { status: 500 }
     );
   }

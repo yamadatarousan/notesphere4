@@ -52,23 +52,18 @@ function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }:
           {tasks.length}
         </span>
       </div>
-      <SortableContext
-        items={tasks.map(task => task.id)}
-        strategy={verticalListSortingStrategy}
-      >
-        <div className="space-y-4">
-          {tasks.map((task) => (
-            <SortableTaskCard
-              key={task.id}
-              id={task.id}
-              task={task}
-              onEdit={onEdit}
-              onDelete={onDelete}
-              onStatusChange={onStatusChange}
-            />
-          ))}
-        </div>
-      </SortableContext>
+      <div className="space-y-4">
+        {tasks.map((task) => (
+          <SortableTaskCard
+            key={task.id}
+            id={task.id}
+            task={task}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onStatusChange={onStatusChange}
+          />
+        ))}
+      </div>
     </div>
   );
 }
@@ -137,7 +132,10 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(task),
+        body: JSON.stringify({
+          ...task,
+          priority: task.priority || 'MEDIUM', // デフォルトの優先度を設定
+        }),
       });
       const data = await response.json();
       if (data.success) {
@@ -156,7 +154,10 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(task),
+        body: JSON.stringify({
+          ...task,
+          priority: task.priority || 'MEDIUM', // デフォルトの優先度を設定
+        }),
       });
       const data = await response.json();
       if (data.success) {
@@ -212,7 +213,26 @@ export default function Home() {
   };
 
   const getTasksByStatus = (status: Task['status']) => {
-    return tasks.filter(task => task.status === status);
+    return tasks
+      .filter(task => task.status === status)
+      .sort((a, b) => {
+        // 優先度の順序を定義
+        const priorityOrder = {
+          'HIGH': 0,
+          'MEDIUM': 1,
+          'LOW': 2,
+        };
+
+        // 優先度が異なる場合は優先度でソート
+        if (a.priority !== b.priority) {
+          return priorityOrder[a.priority] - priorityOrder[b.priority];
+        }
+
+        // 優先度が同じ場合は期限でソート
+        const dateA = a.due_date ? new Date(a.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+        const dateB = b.due_date ? new Date(b.due_date).getTime() : Number.MAX_SAFE_INTEGER;
+        return dateA - dateB;
+      });
   };
 
   const handleDragStart = (event: DragStartEvent) => {
@@ -233,11 +253,19 @@ export default function Home() {
     }
 
     const taskId = Number(active.id);
-    const newStatus = String(over.id) as Task['status'];
+    const overId = String(over.id);
 
-    // 同じステータスへのドロップは無視
+    // タスク同士の重なりをチェック
+    if (overId === String(taskId)) {
+      setActiveTask(null);
+      return;
+    }
+
+    // ステータスの変更をチェック
     const currentTask = tasks.find(t => t.id === taskId);
-    if (!currentTask || currentTask.status === newStatus) {
+    const targetStatus = STATUS_COLUMNS.find(col => col.id === overId)?.id as Task['status'] | undefined;
+
+    if (!currentTask || !targetStatus || currentTask.status === targetStatus) {
       setActiveTask(null);
       return;
     }
@@ -249,7 +277,7 @@ export default function Home() {
     setTasks(prevTasks =>
       prevTasks.map(task =>
         task.id === taskId
-          ? { ...task, status: newStatus }
+          ? { ...task, status: targetStatus }
           : task
       )
     );
@@ -268,7 +296,7 @@ export default function Home() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          status: statusMap[newStatus],
+          status: statusMap[targetStatus],
         }),
       });
 

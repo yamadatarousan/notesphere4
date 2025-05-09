@@ -225,11 +225,9 @@ export default function Home() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveTask(null);
 
     if (!over) {
-      // ドロップ先がない場合は元の状態に戻す
-      fetchTasks();
+      setActiveTask(null);
       return;
     }
 
@@ -238,16 +236,13 @@ export default function Home() {
 
     // 同じステータスへのドロップは無視
     const currentTask = tasks.find(t => t.id === taskId);
-    if (!currentTask || currentTask.status === newStatus) return;
+    if (!currentTask || currentTask.status === newStatus) {
+      setActiveTask(null);
+      return;
+    }
 
-    // 一時的なUI更新
-    setTasks(prevTasks =>
-      prevTasks.map(task =>
-        task.id === taskId
-          ? { ...task, status: newStatus }
-          : task
-      )
-    );
+    // 元のタスクの状態を保存
+    const originalTasks = [...tasks];
 
     try {
       // ステータスを数値に変換
@@ -275,10 +270,25 @@ export default function Home() {
       if (!data.success) {
         throw new Error(data.message || 'Failed to update task status');
       }
+
+      // 成功時は状態を直接更新
+      setTasks(prevTasks =>
+        prevTasks.map(task =>
+          task.id === taskId
+            ? { ...task, status: newStatus }
+            : task
+        )
+      );
+
+      // バックグラウンドで最新の状態を取得
+      fetchTasks();
     } catch (error) {
       console.error('Error updating task status:', error);
       // エラー時は元の状態に戻す
-      fetchTasks();
+      setTasks(originalTasks);
+    } finally {
+      // ドラッグ終了時に必ずオーバーレイをクリア
+      setActiveTask(null);
     }
   };
 
@@ -380,14 +390,19 @@ export default function Home() {
                     />
                   ))}
                 </div>
-                <DragOverlay>
+                <DragOverlay dropAnimation={{
+                  duration: 200,
+                  easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+                }}>
                   {activeTask ? (
-                    <TaskCard
-                      task={activeTask}
-                      onEdit={() => {}}
-                      onDelete={() => {}}
-                      onStatusChange={() => {}}
-                    />
+                    <div className="opacity-80">
+                      <TaskCard
+                        task={activeTask}
+                        onEdit={() => {}}
+                        onDelete={() => {}}
+                        onStatusChange={() => {}}
+                      />
+                    </div>
                   ) : null}
                 </DragOverlay>
               </DndContext>

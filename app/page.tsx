@@ -15,6 +15,7 @@ import {
   useSensor,
   useSensors,
   useDroppable,
+  defaultDropAnimationSideEffects,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -244,6 +245,15 @@ export default function Home() {
     // 元のタスクの状態を保存
     const originalTasks = [...tasks];
 
+    // 即座にUIを更新
+    setTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === taskId
+          ? { ...task, status: newStatus }
+          : task
+      )
+    );
+
     try {
       // ステータスを数値に変換
       const statusMap: { [key: string]: number } = {
@@ -270,18 +280,6 @@ export default function Home() {
       if (!data.success) {
         throw new Error(data.message || 'Failed to update task status');
       }
-
-      // 成功時は状態を直接更新
-      setTasks(prevTasks =>
-        prevTasks.map(task =>
-          task.id === taskId
-            ? { ...task, status: newStatus }
-            : task
-        )
-      );
-
-      // バックグラウンドで最新の状態を取得
-      fetchTasks();
     } catch (error) {
       console.error('Error updating task status:', error);
       // エラー時は元の状態に戻す
@@ -391,11 +389,18 @@ export default function Home() {
                   ))}
                 </div>
                 <DragOverlay dropAnimation={{
-                  duration: 200,
+                  duration: 150,
                   easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)',
+                  sideEffects: defaultDropAnimationSideEffects({
+                    styles: {
+                      active: {
+                        opacity: '0.5',
+                      },
+                    },
+                  }),
                 }}>
                   {activeTask ? (
-                    <div className="opacity-80">
+                    <div className="opacity-90 transform scale-105 transition-transform duration-150">
                       <TaskCard
                         task={activeTask}
                         onEdit={() => {}}

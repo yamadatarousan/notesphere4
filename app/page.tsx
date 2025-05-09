@@ -47,7 +47,7 @@ function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }:
   return (
     <div
       ref={setNodeRef}
-      className={`bg-gray-50 rounded-lg p-8 flex flex-col transition-colors duration-200 ${
+      className={`bg-gray-50 rounded-lg p-8 flex flex-col transition-colors duration-200 min-h-[400px] ${
         isOver ? 'bg-gray-100' : ''
       }`}
       data-status={id}
@@ -58,11 +58,11 @@ function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }:
           {tasks.length}
         </span>
       </div>
-      <div className="relative">
+      <div className="relative flex-1">
         <div className="absolute inset-0 pointer-events-none">
-          {isOver && (
-            <div className="absolute inset-0 border-4 border-dashed border-indigo-500 rounded-lg bg-indigo-50 bg-opacity-50 z-10" />
-          )}
+          <div className={`absolute inset-0 border-4 border-dashed rounded-lg transition-colors duration-200 ${
+            isOver ? 'border-indigo-500 bg-indigo-50 bg-opacity-50' : 'border-transparent'
+          }`} />
         </div>
         <div className="relative z-0">
           <div className="flex flex-col space-y-4">

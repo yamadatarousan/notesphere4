@@ -1,3 +1,5 @@
+'use client';
+
 import { useState, useEffect } from 'react';
 import { Task, CreateTaskInput, UpdateTaskInput } from '@/lib/types';
 import Button from './ui/Button';

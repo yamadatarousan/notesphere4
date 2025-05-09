@@ -44,7 +44,8 @@ function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }:
   return (
     <div
       ref={setNodeRef}
-      className="bg-gray-50 rounded-lg p-4 min-h-[200px]"
+      className="bg-gray-50 rounded-lg p-4 min-h-[200px] h-full flex flex-col"
+      data-status={id}
     >
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-medium text-gray-900">{title}</h2>
@@ -52,7 +53,7 @@ function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }:
           {tasks.length}
         </span>
       </div>
-      <div className="space-y-4">
+      <div className="space-y-4 flex-1">
         {tasks.map((task) => (
           <SortableTaskCard
             key={task.id}
@@ -400,7 +401,7 @@ export default function Home() {
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
               >
-                <div className="grid grid-cols-3 gap-6">
+                <div className="grid grid-cols-3 gap-6 h-full">
                   {STATUS_COLUMNS.map((column) => (
                     <DroppableColumn
                       key={column.id}

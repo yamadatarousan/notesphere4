@@ -1,26 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
-
-// MySQL接続設定
-const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST || 'localhost',
-  user: process.env.MYSQL_USER || 'root',
-  password: process.env.MYSQL_PASSWORD || '',
-  database: process.env.MYSQL_DATABASE || 'notesphere',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+import { pool } from '@/lib/db';
 
 // カテゴリー一覧の取得
 export async function GET() {
   try {
-    const [rows] = await pool.query('SELECT * FROM categories ORDER BY name ASC');
-    return NextResponse.json(rows);
+    const [categories] = await pool.query('SELECT * FROM categories');
+    return NextResponse.json(categories);
   } catch (error) {
     console.error('Error fetching categories:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch categories' },
+      { error: 'Failed to fetch categories', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

@@ -1,16 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import mysql from 'mysql2/promise';
-
-// MySQL接続設定
-const pool = mysql.createPool({
-  host: process.env.MYSQL_HOST || 'localhost',
-  user: process.env.MYSQL_USER || 'root',
-  password: process.env.MYSQL_PASSWORD || '',
-  database: process.env.MYSQL_DATABASE || 'notesphere',
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
-});
+import { pool } from '@/lib/db';
 
 // タスク一覧の取得
 export async function GET(request: NextRequest) {
@@ -25,7 +14,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('Error fetching tasks:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch tasks' },
+      { success: false, error: 'Failed to fetch tasks', details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

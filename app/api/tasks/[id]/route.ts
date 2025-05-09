@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import mysql from 'mysql2/promise';
+import { pool } from '@/lib/db';
 
 // MySQL接続設定
 const pool = mysql.createPool({
@@ -95,11 +96,25 @@ export async function PUT(
 
 // タスクの削除
 export async function DELETE(
-  request: Request,
+  request: NextRequest,
   context: { params: { id: string } }
 ) {
-  const { id } = await context.params;
+  const { id } = context.params;
   try {
+    // まずタスクの存在確認
+    const [existingTask] = await pool.query(
+      'SELECT id FROM tasks WHERE id = ?',
+      [id]
+    );
+
+    if (!(existingTask as any[]).length) {
+      return NextResponse.json(
+        { success: false, error: 'Task not found' },
+        { status: 404 }
+      );
+    }
+
+    // タスクの削除
     const [result] = await pool.query(
       'DELETE FROM tasks WHERE id = ?',
       [id]
@@ -107,16 +122,20 @@ export async function DELETE(
 
     if ((result as any).affectedRows === 0) {
       return NextResponse.json(
-        { success: false, error: 'Task not found' },
-        { status: 404 }
+        { success: false, error: 'Failed to delete task' },
+        { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true, message: 'Task deleted successfully' });
+    return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error deleting task:', error);
     return NextResponse.json(
-      { success: false, error: 'Failed to delete task' },
+      { 
+        success: false, 
+        error: 'Failed to delete task',
+        details: error instanceof Error ? error.message : String(error)
+      },
       { status: 500 }
     );
   }

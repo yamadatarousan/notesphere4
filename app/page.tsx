@@ -87,6 +87,14 @@ export default function Home() {
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [formData, setFormData] = useState<CreateTaskInput>({
+    title: '',
+    description: '',
+    status: 'TODO',
+    priority: 'MEDIUM',
+    due_date: null,
+    category: null,
+  });
 
   const sensors = useSensors(
     useSensor(MouseSensor, {
@@ -215,13 +223,52 @@ export default function Home() {
     }
   };
 
-  const handleSubmit = async (task: CreateTaskInput | UpdateTaskInput) => {
-    if ('id' in task) {
-      await handleUpdateTask(task);
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    
+    if (editingTask) {
+      await handleUpdateTask({
+        id: editingTask.id,
+        ...formData,
+      });
     } else {
-      await handleCreateTask(task);
+      await handleCreateTask(formData);
     }
+    
+    setIsModalOpen(false);
+    setEditingTask(undefined);
+    setFormData({
+      title: '',
+      description: '',
+      status: 'TODO',
+      priority: 'MEDIUM',
+      due_date: null,
+      category: null,
+    });
   };
+
+  // モーダルを開く時にフォームデータを初期化
+  useEffect(() => {
+    if (isModalOpen && editingTask) {
+      setFormData({
+        title: editingTask.title,
+        description: editingTask.description || '',
+        status: editingTask.status,
+        priority: editingTask.priority,
+        due_date: editingTask.due_date,
+        category: editingTask.category,
+      });
+    } else if (isModalOpen) {
+      setFormData({
+        title: '',
+        description: '',
+        status: 'TODO',
+        priority: 'MEDIUM',
+        due_date: null,
+        category: null,
+      });
+    }
+  }, [isModalOpen, editingTask]);
 
   const getTasksByStatus = (status: Task['status']) => {
     return tasks
@@ -460,16 +507,131 @@ export default function Home() {
         </div>
       </div>
 
-      <TaskModal
-        isOpen={isModalOpen}
-        onClose={() => {
-          setIsModalOpen(false);
-          setEditingTask(undefined);
-        }}
-        onSubmit={handleSubmit}
-        task={editingTask}
-        categories={categories}
-      />
+      {/* タスク編集モーダル */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999]">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-semibold mb-4">
+              {editingTask ? 'タスクを編集' : '新しいタスク'}
+            </h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+                  タイトル
+                </label>
+                <input
+                  type="text"
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  required
+                />
+              </div>
+              <div>
+                <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                  説明
+                </label>
+                <textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  rows={3}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="status" className="block text-sm font-medium text-gray-700">
+                  ステータス
+                </label>
+                <select
+                  id="status"
+                  value={formData.status}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value as Task['status'] })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  {STATUS_COLUMNS.map((column) => (
+                    <option key={column.id} value={column.id}>
+                      {column.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="priority" className="block text-sm font-medium text-gray-700">
+                  優先度
+                </label>
+                <select
+                  id="priority"
+                  value={formData.priority}
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value as Task['priority'] })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="HIGH">HIGH</option>
+                  <option value="MEDIUM">MEDIUM</option>
+                  <option value="LOW">LOW</option>
+                </select>
+              </div>
+              <div>
+                <label htmlFor="due_date" className="block text-sm font-medium text-gray-700">
+                  期限
+                </label>
+                <input
+                  type="date"
+                  id="due_date"
+                  value={formData.due_date ? new Date(formData.due_date).toISOString().split('T')[0] : ''}
+                  onChange={(e) => setFormData({ ...formData, due_date: e.target.value ? new Date(e.target.value) : null })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                />
+              </div>
+              <div>
+                <label htmlFor="category" className="block text-sm font-medium text-gray-700">
+                  カテゴリー
+                </label>
+                <select
+                  id="category"
+                  value={formData.category || ''}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value ? Number(e.target.value) : null })}
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                >
+                  <option value="">カテゴリーを選択</option>
+                  {categories.map((category: any) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsModalOpen(false);
+                    setEditingTask(undefined);
+                    setFormData({
+                      title: '',
+                      description: '',
+                      status: 'TODO',
+                      priority: 'MEDIUM',
+                      due_date: null,
+                      category: null,
+                    });
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  キャンセル
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 border border-transparent rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  {editingTask ? '更新' : '作成'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

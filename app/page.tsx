@@ -5,6 +5,22 @@ import { Task, CreateTaskInput, UpdateTaskInput } from '@/lib/types';
 import TaskCard from './components/TaskCard';
 import TaskModal from './components/TaskModal';
 import Button from './components/ui/Button';
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  MouseSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  useDroppable,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { SortableTaskCard } from '@/app/components/SortableTaskCard';
 
 const STATUS_COLUMNS = [
   { id: 'TODO', title: 'To Do' },
@@ -12,12 +28,71 @@ const STATUS_COLUMNS = [
   { id: 'DONE', title: 'Done' },
 ] as const;
 
+function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }: {
+  id: Task['status'];
+  title: string;
+  tasks: Task[];
+  onEdit: (task: Task) => void;
+  onDelete: (taskId: number) => void;
+  onStatusChange: (taskId: number, status: Task['status']) => void;
+}) {
+  const { setNodeRef } = useDroppable({
+    id,
+  });
+
+  return (
+    <div
+      ref={setNodeRef}
+      className="bg-gray-50 rounded-lg p-4 min-h-[200px]"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-medium text-gray-900">{title}</h2>
+        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+          {tasks.length}
+        </span>
+      </div>
+      <SortableContext
+        items={tasks.map(task => task.id)}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className="space-y-4">
+          {tasks.map((task) => (
+            <SortableTaskCard
+              key={task.id}
+              id={task.id}
+              task={task}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onStatusChange={onStatusChange}
+            />
+          ))}
+        </div>
+      </SortableContext>
+    </div>
+  );
+}
+
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined>();
   const [categories, setCategories] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTask, setActiveTask] = useState<Task | null>(null);
+
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 100,
+        tolerance: 5,
+      },
+    })
+  );
 
   // タスク一覧の取得
   const fetchTasks = async () => {
@@ -139,6 +214,74 @@ export default function Home() {
     return tasks.filter(task => task.status === status);
   };
 
+  const handleDragStart = (event: DragStartEvent) => {
+    const { active } = event;
+    const taskId = Number(active.id);
+    const task = tasks.find((t) => t.id === taskId);
+    if (task) {
+      setActiveTask(task);
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTask(null);
+
+    if (!over) {
+      // ドロップ先がない場合は元の状態に戻す
+      fetchTasks();
+      return;
+    }
+
+    const taskId = Number(active.id);
+    const newStatus = String(over.id) as Task['status'];
+
+    // 同じステータスへのドロップは無視
+    const currentTask = tasks.find(t => t.id === taskId);
+    if (!currentTask || currentTask.status === newStatus) return;
+
+    // 一時的なUI更新
+    setTasks(prevTasks =>
+      prevTasks.map(task =>
+        task.id === taskId
+          ? { ...task, status: newStatus }
+          : task
+      )
+    );
+
+    try {
+      // ステータスを数値に変換
+      const statusMap: { [key: string]: number } = {
+        'TODO': 0,
+        'IN_PROGRESS': 1,
+        'DONE': 2
+      };
+
+      const response = await fetch(`/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: statusMap[newStatus],
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update task status');
+      }
+
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.message || 'Failed to update task status');
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      // エラー時は元の状態に戻す
+      fetchTasks();
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* サイドバー */}
@@ -216,32 +359,38 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-6">
-                {STATUS_COLUMNS.map((column) => (
-                  <div key={column.id} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-lg font-medium text-gray-900">{column.title}</h2>
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {getTasksByStatus(column.id as Task['status']).length}
-                      </span>
-                    </div>
-                    <div className="space-y-4">
-                      {getTasksByStatus(column.id as Task['status']).map((task) => (
-                        <TaskCard
-                          key={task.id}
-                          task={task}
-                          onEdit={(task) => {
-                            setEditingTask(task);
-                            setIsModalOpen(true);
-                          }}
-                          onDelete={handleDeleteTask}
-                          onStatusChange={handleStatusChange}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
+              <DndContext
+                sensors={sensors}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+              >
+                <div className="grid grid-cols-3 gap-6">
+                  {STATUS_COLUMNS.map((column) => (
+                    <DroppableColumn
+                      key={column.id}
+                      id={column.id}
+                      title={column.title}
+                      tasks={getTasksByStatus(column.id as Task['status'])}
+                      onEdit={(task) => {
+                        setEditingTask(task);
+                        setIsModalOpen(true);
+                      }}
+                      onDelete={handleDeleteTask}
+                      onStatusChange={handleStatusChange}
+                    />
+                  ))}
+                </div>
+                <DragOverlay>
+                  {activeTask ? (
+                    <TaskCard
+                      task={activeTask}
+                      onEdit={() => {}}
+                      onDelete={() => {}}
+                      onStatusChange={() => {}}
+                    />
+                  ) : null}
+                </DragOverlay>
+              </DndContext>
             )}
           </div>
         </div>

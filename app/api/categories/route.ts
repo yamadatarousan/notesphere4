@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
+import { pool } from '@/lib/db';
 import { CreateCategoryInput } from '@/lib/types';
 
 // カテゴリー一覧の取得

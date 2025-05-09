@@ -17,6 +17,7 @@ import {
   useDroppable,
   defaultDropAnimationSideEffects,
   closestCenter,
+  pointerWithin,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -46,24 +47,24 @@ function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }:
   return (
     <div
       ref={setNodeRef}
-      className={`bg-gray-50 rounded-lg p-4 min-h-[200px] h-full flex flex-col transition-colors duration-200 ${
+      className={`bg-gray-50 rounded-lg p-6 h-full flex flex-col transition-colors duration-200 ${
         isOver ? 'bg-gray-100' : ''
       }`}
       data-status={id}
     >
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-6">
         <h2 className="text-lg font-medium text-gray-900">{title}</h2>
         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
           {tasks.length}
         </span>
       </div>
-      <div className="space-y-4 flex-1 relative">
+      <div className="flex-1 relative overflow-y-auto">
         <div className="absolute inset-0 pointer-events-none">
           {isOver && (
-            <div className="absolute inset-0 border-2 border-dashed border-indigo-500 rounded-lg bg-indigo-50 bg-opacity-50" />
+            <div className="absolute inset-0 border-4 border-dashed border-indigo-500 rounded-lg bg-indigo-50 bg-opacity-50 z-10" />
           )}
         </div>
-        <div className="relative z-10">
+        <div className="relative z-0 space-y-4 min-h-[200px]">
           {tasks.map((task) => (
             <SortableTaskCard
               key={task.id}
@@ -99,13 +100,13 @@ export default function Home() {
   const sensors = useSensors(
     useSensor(MouseSensor, {
       activationConstraint: {
-        distance: 5,
+        distance: 10,
       },
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
         delay: 100,
-        tolerance: 5,
+        tolerance: 10,
       },
     })
   );
@@ -461,9 +462,9 @@ export default function Home() {
                 sensors={sensors}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
-                collisionDetection={closestCenter}
+                collisionDetection={pointerWithin}
               >
-                <div className="grid grid-cols-3 gap-6 h-full">
+                <div className="grid grid-cols-3 gap-8 h-[calc(100vh-200px)]">
                   {STATUS_COLUMNS.map((column) => (
                     <DroppableColumn
                       key={column.id}

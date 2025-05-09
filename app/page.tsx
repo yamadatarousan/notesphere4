@@ -16,6 +16,7 @@ import {
   useSensors,
   useDroppable,
   defaultDropAnimationSideEffects,
+  closestCenter,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -38,14 +39,16 @@ function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }:
   onDelete: (taskId: number) => void;
   onStatusChange: (taskId: number, status: Task['status']) => void;
 }) {
-  const { setNodeRef } = useDroppable({
+  const { setNodeRef, isOver } = useDroppable({
     id,
   });
 
   return (
     <div
       ref={setNodeRef}
-      className="bg-gray-50 rounded-lg p-4 min-h-[200px] h-full flex flex-col"
+      className={`bg-gray-50 rounded-lg p-4 min-h-[200px] h-full flex flex-col transition-colors duration-200 ${
+        isOver ? 'bg-gray-100' : ''
+      }`}
       data-status={id}
     >
       <div className="flex items-center justify-between mb-4">
@@ -54,17 +57,24 @@ function DroppableColumn({ id, title, tasks, onEdit, onDelete, onStatusChange }:
           {tasks.length}
         </span>
       </div>
-      <div className="space-y-4 flex-1">
-        {tasks.map((task) => (
-          <SortableTaskCard
-            key={task.id}
-            id={task.id}
-            task={task}
-            onEdit={onEdit}
-            onDelete={onDelete}
-            onStatusChange={onStatusChange}
-          />
-        ))}
+      <div className="space-y-4 flex-1 relative">
+        <div className="absolute inset-0 pointer-events-none">
+          {isOver && (
+            <div className="absolute inset-0 border-2 border-dashed border-indigo-500 rounded-lg bg-indigo-50 bg-opacity-50" />
+          )}
+        </div>
+        <div className="relative z-10">
+          {tasks.map((task) => (
+            <SortableTaskCard
+              key={task.id}
+              id={task.id}
+              task={task}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onStatusChange={onStatusChange}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -404,6 +414,7 @@ export default function Home() {
                 sensors={sensors}
                 onDragStart={handleDragStart}
                 onDragEnd={handleDragEnd}
+                collisionDetection={closestCenter}
               >
                 <div className="grid grid-cols-3 gap-6 h-full">
                   {STATUS_COLUMNS.map((column) => (

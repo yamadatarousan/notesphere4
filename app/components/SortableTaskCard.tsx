@@ -34,7 +34,8 @@ export function SortableTaskCard({ id, task, onEdit, onDelete, onStatusChange }:
     cursor: 'grab',
     touchAction: 'none',
     position: 'relative' as const,
-    zIndex: isDragging ? 1 : 0,
+    zIndex: isDragging ? 999 : 'auto',
+    pointerEvents: isDragging ? 'none' as const : 'auto' as const,
   };
 
   return (
